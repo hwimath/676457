@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>일차방정식 게임!</title>
+    <!-- MathJax 라이브러리 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        #start-screen, #game-screen, #end-screen {
+            display: none;
+            padding: 20px;
+        }
+        #start-screen.visible, #game-screen.visible, #end-screen.visible {
+            display: block;
+        }
+        h1 {
+            color: #ff4500;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .button {
+            padding: 15px 25px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        #choices {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .choice-button {
+            padding: 15px 25px;
+            font-size: 20px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #008CBA;
+            color: white;
+            transition: background-color 0.3s;
+            width: 300px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .choice-button:hover {
+            background-color: #007bb5;
+        }
+        #energy-bar {
+            width: 100%;
+            height: 30px;
+            background-color: #ddd;
+            margin: 20px 0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #energy {
+            height: 100%;
+            background-color: #76c7c0;
+            width: 100%;
+            transition: width 0.2s linear;
+        }
+        #stats {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        #message {
+            font-size: 22px;
+            color: red;
+            margin-top: 20px;
+            min-height: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 시작 화면 -->
+    <div id="start-screen" class="visible">
+        <h1>일차방정식 게임!</h1>
+        <h2>난이도를 선택하세요</h2>
+        <button class="button" onclick="startGame('highest')">최상</button>
+        <button class="button" onclick="startGame('high')">상</button>
+        <button class="button" onclick="startGame('medium')">중</button>
+        <button class="button" onclick="startGame('low')">하</button>
+    </div>
+
+    <!-- 게임 화면 -->
+    <div id="game-screen">
+        <h1>일차방정식 게임!</h1>
+        <div id="energy-bar">
+            <div id="energy"></div>
+        </div>
+        <div id="question-container">
+            <div id="question" style="font-size: 24px; margin: 20px 0;">
+                일차방정식을 풀고 정답을 선택하세요:<br>
+                <span id="equation"></span>
+            </div>
+            <div id="choices">
+                <button class="choice-button" onclick="checkAnswer(1)" id="choice1">1</button>
+                <button class="choice-button" onclick="checkAnswer(2)" id="choice2">2</button>
+                <button class="choice-button" onclick="checkAnswer(3)" id="choice3">3</button>
+                <button class="choice-button" onclick="checkAnswer(4)" id="choice4">4</button>
+            </div>
+        </div>
+        <div id="message"></div>
+        <div id="stats">
+            <p>점수: <span id="score">0</span></p>
+            <p>남은 기회: <span id="lives">3</span></p>
+            <p>총 게임 시간: <span id="game-time">0</span>초</p>
+        </div>
+    </div>
+
+    <!-- 종료 화면 -->
+    <div id="end-screen">
+        <h1>게임 종료!</h1>
+        <p>최종 점수: <span id="final-score">0</span></p>
+        <p>총 게임 시간: <span id="final-time">0</span>초</p>
+        <button class="button" onclick="restartGame()">다시 시작</button>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // 난이도별 설정
+            const difficultySettings = {
+                'highest': { time: 20, points: 20 },
+                'high': { time: 25, points: 15 },
+                'medium': { time: 30, points: 10 },
+                'low': { time: 35, points: 5 }
+            };
+            let difficulty;
+            let timeLimit;
+            let score = 0;
+            let lives = 3;
+            let totalGameTime = 0;
+            let gameInterval;
+            let energyInterval;
+            let gameStartTime;
+
+            let currentQuestionIndex = 0;
+            let questions = [];
+            let correctAnswerIndex = 0;
+
+            // 문제 데이터 배열 (50개)
+            const questionData = [
+                { equation: "\\( 1 - \\left( x - 8(1 - 2x) \\right) = 18 \\)", solution: { numerator: -9, denominator: 17 } },
+                { equation: "\\( 6\\left( 2x - (3x - 1) \\right) = -12 \\)", solution: { numerator: 3, denominator: 1 } },
+                { equation: "\\( 12 - \\left[ 7 - (6x - 6) \\right] = 8 + 2x \\)", solution: { numerator: 9, denominator: 4 } },
+                { equation: "\\( 8 - \\left[ 7(8 - x) - x \\right] = -3x + 1 \\)", solution: { numerator: 49, denominator: 11 } },
+                { equation: "\\( 7(2x - 8) + 3 = -3x - \\left[ 7x - (1 - 2x) \\right] \\)", solution: { numerator: 27, denominator: 11 } },
+                { equation: "\\( 8x - \\left[ 6x - 2x - (6x - 1) \\right] = 6 \\)", solution: { numerator: 7, denominator: 10 } },
+                { equation: "\\( x - \\left[ 2x + 3(7x - (8x - 1)) \\right] = 2(9 - x) \\)", solution: { numerator: 21, denominator: 4 } },
+                { equation: "\\( 2\\left( 6 - (7x + 1) + 8x \\right) = 7x - 9 \\)", solution: { numerator: 19, denominator: 5 } },
+                { equation: "\\( 12 - \\left[ 7 - (2x + 3) \\right] = 8 + x \\)", solution: { numerator: 0, denominator: 1 } },
+                { equation: "\\( 8(x - 7) = 2\\left( 7 + 6(-2x + 1) \\right) \\)", solution: { numerator: 41, denominator: 16 } },
+                { equation: "\\( x - 0.6 = 1.3x - 1.2 \\)", solution: { numerator: 2, denominator: 1 } },
+                { equation: "\\( 0.8(x - 2) = x + 0.1 \\)", solution: { numerator: -17, denominator: 2 } },
+                { equation: "\\( 0.3x + 0.8 = 0.2 \\)", solution: { numerator: -2, denominator: 1 } },
+                { equation: "\\( -0.8x + 2.7 = -1.6 \\)", solution: { numerator: 43, denominator: 8 } },
+                { equation: "\\( 0.6x - 0.7 = 0.8 \\)", solution: { numerator: 5, denominator: 2 } },
+                { equation: "\\( 0.9x + 1.2 = -1.8 \\)", solution: { numerator: -10, denominator: 3 } },
+                { equation: "\\( 0.06x + 0.26 = 0.72 \\)", solution: { numerator: 23, denominator: 3 } },
+                { equation: "\\( 0.02x - 0.18 = 0.08 \\)", solution: { numerator: 13, denominator: 1 } },
+                { equation: "\\( 0.27x + 8.2 = 0.07x - 0.8 \\)", solution: { numerator: -45, denominator: 1 } },
+                { equation: "\\( 0.03x - 0.24 = 0.07x - 0.39 \\)", solution: { numerator: 15, denominator: 4 } },
+                { equation: "\\( -0.02x + 0.2 = -0.36 \\)", solution: { numerator: 28, denominator: 1 } },
+                { equation: "\\( 0.2x + 3 = 1.2 \\)", solution: { numerator: -9, denominator: 1 } },
+                { equation: "\\( 0.7x - 1 = 0.2 \\)", solution: { numerator: 12, denominator: 7 } },
+                { equation: "\\( 0.07x - 0.06 = 0.016x \\)", solution: { numerator: 10, denominator: 9 } },
+                { equation: "\\( 0.18x = 0.08x - 1.2 \\)", solution: { numerator: -12, denominator: 1 } },
+                { equation: "\\( x + 0.2 = 0.96x - 6 \\)", solution: { numerator: -155, denominator: 1 } },
+                { equation: "\\( 0.18x + 1 = 0.1x + 0.88 \\)", solution: { numerator: -3, denominator: 2 } },
+                { equation: "\\( 0.1x - 1 = -2.2 \\)", solution: { numerator: -12, denominator: 1 } },
+                { equation: "\\( 0.2x + 0.8 = -3\\left( -0.6x + 0.2 \\right) \\)", solution: { numerator: 7, denominator: 8 } },
+                { equation: "\\( 0.02x - 0.08 = 0.06x \\)", solution: { numerator: -2, denominator: 1 } },
+                { equation: "\\( 0.08x - 0.13 = -0.08x \\)", solution: { numerator: 13, denominator: 16 } },
+                { equation: "\\( 0.7x - 1.8 = 0.8 - 0.1x \\)", solution: { numerator: 13, denominator: 4 } },
+                { equation: "\\( 0.9x - 0.86 = 0.08 \\)", solution: { numerator: 47, denominator: 45 } },
+                { equation: "\\( 1.6x + 1 = 2.6x + 3.9 \\)", solution: { numerator: -29, denominator: 10 } },
+                { equation: "\\( 0.2x + 1.8 = 1.2 - 0.1x \\)", solution: { numerator: -2, denominator: 1 } },
+                { equation: "\\( 0.12x + 0.09 = 0.08x - 0.18 \\)", solution: { numerator: -27, denominator: 4 } },
+                { equation: "\\( 0.08x + 0.036 = 0.014x + 0.14 \\)", solution: { numerator: 52, denominator: 33 } },
+                { equation: "\\( 0.2(2x + 3) = 0.3(x - 2) \\)", solution: { numerator: -12, denominator: 1 } },
+                { equation: "\\( 0.08(x - 8) = 0.09(2x - 6) \\)", solution: { numerator: -1, denominator: 1 } },
+                { equation: "\\( 0.7x - 0.8 = 0.7 - 0.8x \\)", solution: { numerator: 1, denominator: 1 } },
+                { equation: "\\( 0.2(x - 1) = 0.8x + 1 \\)", solution: { numerator: -2, denominator: 1 } },
+                { equation: "\\( 0.6x - 0.2 = 0.6(x + 9) \\)", solution: { solution: "No solution" } },
+                { equation: "\\( 0.06x = -0.2(1.2x - 2.6) \\)", solution: { numerator: 26, denominator: 15 } },
+                { equation: "\\( 0.8x + 2.7 = 0.6x - 1.5 \\)", solution: { numerator: -21, denominator: 1 } },
+                { equation: "\\( 0.7(x + 6) = 0.9x + 0.2 \\)", solution: { numerator: 20, denominator: 1 } },
+                { equation: "\\( 6x - 8 = 0.2(8x + 10) + 6 \\)", solution: { numerator: 40, denominator: 11 } },
+                { equation: "\\( 0.08x - 0.2 = 0.06x - 0.14 \\)", solution: { numerator: 3, denominator: 1 } },
+                { equation: "\\( \\frac{8.9 - 1.6x}{0.8x + 0.2} = -0.3 \\)", solution: { numerator: 112, denominator: 17 } },
+                { equation: "\\( \\frac{x - 1}{7} = \\frac{x}{6} \\)", solution: { numerator: -6, denominator: 1 } },
+                { equation: "\\( \\frac{2x - 1}{6} = \\frac{x + 7}{2} \\)", solution: { numerator: -22, denominator: 1 } }
+            ];
+
+            // 방정식 풀기 및 보기 생성 함수
+            function generateQuestions() {
+                questions = [];
+                for (let i = 0; i < questionData.length; i++) {
+                    const q = questionData[i];
+                    const correctSol = q.solution;
+
+                    // 오답 생성
+                    const incorrectAnswers = generateIncorrectAnswers(correctSol);
+
+                    // 모든 선택지
+                    let allChoices = [];
+                    if (correctSol.solution === "No solution") {
+                        allChoices = ["\\( \\text{No solution} \\)", ...incorrectAnswers];
+                    } else {
+                        allChoices = [formatSolution(correctSol), ...incorrectAnswers];
+                    }
+
+                    // 선택지 섞기
+                    shuffleArray(allChoices);
+
+                    // 정답 인덱스 찾기 (1~4)
+                    let correctIndex;
+                    if (correctSol.solution === "No solution") {
+                        correctIndex = allChoices.indexOf("\\( \\text{No solution} \\)") + 1;
+                    } else {
+                        correctIndex = allChoices.indexOf(formatSolution(correctSol)) + 1;
+                    }
+
+                    // 추가 정보 저장
+                    questions.push({
+                        equation: q.equation,
+                        solution: correctSol.solution === "No solution" ? "\\( \\text{No solution} \\)" : formatSolution(correctSol),
+                        choices: allChoices,
+                        correctIndex: correctIndex
+                    });
+                }
+            }
+
+            // 오답 생성 함수
+            function generateIncorrectAnswers(correctSol) {
+                const incorrect = [];
+                const maxAttempts = 100;
+                let attempts = 0;
+
+                // 정답의 값
+                let correctValue;
+                if (correctSol.solution === "No solution") {
+                    // For "No solution", generate arbitrary numbers as incorrect answers
+                    correctValue = null;
+                } else {
+                    if (correctSol.denominator === 1) {
+                        correctValue = correctSol.numerator;
+                    } else {
+                        correctValue = correctSol.numerator / correctSol.denominator;
+                    }
+                }
+
+                while (incorrect.length < 3 && attempts < maxAttempts) {
+                    attempts++;
+
+                    let newValue;
+
+                    if (correctValue !== null) {
+                        // 오답은 정답과 ±1 또는 ±0.5 범위 내에서 생성
+                        const delta = getRandomInt(-2, 2);
+                        if (Math.abs(delta) === 2) {
+                            newValue = correctValue + delta;
+                        } else if (Math.abs(delta) === 1) {
+                            newValue = correctValue + delta * 0.5;
+                        } else {
+                            newValue = correctValue + getRandomInt(-1, 1) * 1.0;
+                        }
+                    } else {
+                        // "No solution"인 경우, 임의의 숫자 생성
+                        newValue = getRandomInt(-20, 20);
+                        if (newValue === 0) continue; // 0은 피함
+                    }
+
+                    // 정수 또는 기약분수 형태로 변환
+                    let numerator, denominator;
+                    if (correctSol.solution === "No solution") {
+                        // For "No solution", set as integer
+                        numerator = newValue;
+                        denominator = 1;
+                    } else {
+                        if (Number.isInteger(newValue)) {
+                            numerator = newValue;
+                            denominator = 1;
+                        } else {
+                            // 소수를 기약분수으로 변환
+                            const decimalStr = newValue.toString();
+                            const decimalPlaces = decimalStr.split('.')[1]?.length || 0;
+                            denominator = Math.pow(10, decimalPlaces);
+                            numerator = newValue * denominator;
+                            const gcd = getGCD(Math.abs(numerator), Math.abs(denominator));
+                            numerator /= gcd;
+                            denominator /= gcd;
+                            if (denominator < 0) {
+                                numerator = -numerator;
+                                denominator = -denominator;
+                            }
+                        }
+                    }
+
+                    // 형식에 맞게 포맷팅
+                    let formatted;
+                    if (denominator === 1) {
+                        formatted = `\\( ${numerator} \\)`;
+                    } else {
+                        formatted = `\\( \\frac{${numerator}}{${denominator}} \\)`;
+                    }
+
+                    // "No solution"인 경우, 오답은 정수 또는 분수로
+                    // 정답과 동일하지 않은지, 중복되지 않는지 확인
+                    if (correctSol.solution !== "No solution") {
+                        if (formatted === formatSolution(correctSol)) continue;
+                    }
+
+                    if (incorrect.includes(formatted)) continue;
+
+                    incorrect.push(formatted);
+                }
+
+                // 충분한 오답이 생성되지 않았을 경우 랜덤 오답 추가
+                while (incorrect.length < 3) {
+                    let newValue;
+                    if (correctSol.solution === "No solution") {
+                        newValue = getRandomInt(-20, 20);
+                        if (newValue === 0) continue;
+                    } else {
+                        newValue = getRandomInt(-10, 10);
+                        if (newValue === 0) continue;
+                    }
+
+                    let numerator, denominator;
+                    if (correctSol.solution === "No solution") {
+                        numerator = newValue;
+                        denominator = 1;
+                    } else {
+                        if (Number.isInteger(newValue)) {
+                            numerator = newValue;
+                            denominator = 1;
+                        } else {
+                            const decimalStr = newValue.toString();
+                            const decimalPlaces = decimalStr.split('.')[1]?.length || 0;
+                            denominator = Math.pow(10, decimalPlaces);
+                            numerator = newValue * denominator;
+                            const gcd = getGCD(Math.abs(numerator), Math.abs(denominator));
+                            numerator /= gcd;
+                            denominator /= gcd;
+                            if (denominator < 0) {
+                                numerator = -numerator;
+                                denominator = -denominator;
+                            }
+                        }
+                    }
+
+                    let formatted;
+                    if (denominator === 1) {
+                        formatted = `\\( ${numerator} \\)`;
+                    } else {
+                        formatted = `\\( \\frac{${numerator}}{${denominator}} \\)`;
+                    }
+
+                    if (correctSol.solution !== "No solution") {
+                        if (formatted === formatSolution(correctSol)) continue;
+                    }
+
+                    if (incorrect.includes(formatted)) continue;
+
+                    incorrect.push(formatted);
+                }
+
+                return incorrect;
+            }
+
+            // 방정식 포맷팅 함수
+            function formatEquation(eq) {
+                return eq;
+            }
+
+            // 해 포맷팅 함수
+            function formatSolution(sol) {
+                if (sol === "No solution") {
+                    return "\\( \\text{No solution} \\)";
+                } else if (sol.denominator === 1) {
+                    return `\\( ${sol.numerator} \\)`;
+                } else {
+                    return `\\( \\frac{${sol.numerator}}{${sol.denominator}} \\)`;
+                }
+            }
+
+            // 정답 확인 함수
+            window.checkAnswer = function(selectedChoice) {
+                clearInterval(energyInterval);
+                let question = questions[currentQuestionIndex - 1];
+                let correctSol = question.solution;
+
+                if (selectedChoice === question.correctIndex) {
+                    score += difficultySettings[difficulty].points;
+                    document.getElementById('message').innerHTML = '정답입니다! 🎉';
+                } else {
+                    lives--;
+                    document.getElementById('message').innerHTML = `틀렸습니다! 정답은 ${correctSol} 입니다. 😢`;
+                }
+                updateStats();
+
+                if (lives <= 0) {
+                    endGame();
+                } else {
+                    setTimeout(generateQuestion, 2000);
+                    if (difficulty !== 'low') {
+                        startEnergyBar();
+                    }
+                }
+            }
+
+            // 점수 및 생명 업데이트 함수
+            function updateStats() {
+                document.getElementById('score').innerText = score;
+                document.getElementById('lives').innerText = lives;
+                document.getElementById('game-time').innerText = totalGameTime;
+            }
+
+            // 게임 시작 함수
+            window.startGame = function(selectedDifficulty) {
+                difficulty = selectedDifficulty;
+                timeLimit = difficultySettings[difficulty].time;
+                document.getElementById('start-screen').classList.remove('visible');
+                document.getElementById('game-screen').classList.add('visible');
+                gameStartTime = Date.now();
+                score = 0;
+                lives = 3;
+                totalGameTime = 0;
+                generateQuestions();
+                shuffleArray(questions);
+                currentQuestionIndex = 0;
+                updateStats();
+                generateQuestion();
+                if (difficulty !== 'low') {
+                    startEnergyBar();
+                }
+                gameInterval = setInterval(() => {
+                    totalGameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                    document.getElementById('game-time').innerText = totalGameTime;
+                }, 1000);
+            }
+
+            // 문제 제시 함수
+            function generateQuestion() {
+                document.getElementById('message').innerHTML = '';
+                if (currentQuestionIndex >= questions.length) {
+                    currentQuestionIndex = 0;
+                    shuffleArray(questions);
+                }
+                let question = questions[currentQuestionIndex];
+                currentQuestionIndex++;
+
+                // 문제 표시
+                document.getElementById('equation').innerHTML = question.equation;
+                MathJax.typesetPromise();
+
+                // 답안 배열 설정
+                for (let i = 1; i <= 4; i++) {
+                    let choiceButton = document.getElementById(`choice${i}`);
+                    choiceButton.innerHTML = question.choices[i-1];
+                }
+                MathJax.typesetPromise();
+                correctAnswerIndex = question.correctIndex;
+            }
+
+            // 게임 종료 함수
+            function endGame() {
+                clearInterval(gameInterval);
+                clearInterval(energyInterval);
+                document.getElementById('game-screen').classList.remove('visible');
+                document.getElementById('end-screen').classList.add('visible');
+                document.getElementById('final-score').innerText = score;
+                document.getElementById('final-time').innerText = totalGameTime;
+            }
+
+            // 게임 재시작 함수
+            window.restartGame = function() {
+                score = 0;
+                lives = 3;
+                totalGameTime = 0;
+                document.getElementById('end-screen').classList.remove('visible');
+                document.getElementById('game-screen').classList.add('visible');
+                updateStats();
+                generateQuestion();
+                if (difficulty !== 'low') {
+                    startEnergyBar();
+                }
+                gameStartTime = Date.now();
+                gameInterval = setInterval(() => {
+                    totalGameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                    document.getElementById('game-time').innerText = totalGameTime;
+                }, 1000);
+            }
+
+            // 에너지 바 시작 함수
+            function startEnergyBar() {
+                clearInterval(energyInterval);
+                let energyBar = document.getElementById('energy');
+                let width = 100;
+                let decrement = 100 / (timeLimit * 10); // 에너지 바 업데이트 간격에 따라 조정
+
+                energyBar.style.width = '100%';
+                energyInterval = setInterval(() => {
+                    width -= decrement;
+                    if (width <= 0) {
+                        clearInterval(energyInterval);
+                        lives--;
+                        updateStats();
+                        let currentQuestion = questions[currentQuestionIndex - 1];
+                        document.getElementById('message').innerHTML = `시간 초과! 정답은 ${currentQuestion.solution} 입니다. 😮`;
+                        if (lives <= 0) {
+                            endGame();
+                        } else {
+                            setTimeout(generateQuestion, 2000);
+                            if (difficulty !== 'low') {
+                                startEnergyBar();
+                            }
+                        }
+                    } else {
+                        energyBar.style.width = width + '%';
+                    }
+                }, 100); // 0.1초마다 에너지 바 업데이트
+            }
+
+            // 문제 생성 시 필요한 Shuffle 함수
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    let j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            // 유클리드 호제법을 이용한 최대 공약수 계산 함수
+            function getGCD(a, b) {
+                while (b !== 0) {
+                    let temp = b;
+                    b = a % b;
+                    a = temp;
+                }
+                return a;
+            }
+
+            // 랜덤 정수 생성 함수
+            function getRandomInt(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            // 초기 문제 생성
+            generateQuestions();
+        };
+    </script>
+
+</body>
+</html>
